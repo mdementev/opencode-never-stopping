@@ -8,7 +8,7 @@ Your agent finishes a task and just sits there — tokens idle, deep thoughts un
 
 ```bash
 # npm
-opencode plugin add opencode-never-stop
+opencode plugin opencode-never-stop -g
 
 # or locally, straight from this repo
 ./scripts/install.sh   # macOS / Linux
