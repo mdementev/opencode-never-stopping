@@ -192,11 +192,19 @@ export const OpenCodeNeverStop: Plugin = async ({ client, directory }) => {
       if (timer) clearTimeout(timer)
     },
     "command.execute.before": async (input, output) => {
+      // prompt.ts keeps its own reference to the parts array, so the hook
+      // must mutate it in place instead of rebinding output.parts
       if (input.command === "opencode-never-stop") {
-        output.parts = [{ type: "text", text: "opencode-never-stop: monitoring enabled." }] as Part[]
+        output.parts.splice(0, output.parts.length, {
+          type: "text",
+          text: "opencode-never-stop: monitoring enabled.",
+        } as Part)
         await start(input.sessionID)
       } else if (input.command === "opencode-stop") {
-        output.parts = [{ type: "text", text: "opencode-never-stop: monitoring disabled." }] as Part[]
+        output.parts.splice(0, output.parts.length, {
+          type: "text",
+          text: "opencode-never-stop: monitoring disabled.",
+        } as Part)
         await stop()
       }
     },
