@@ -1,4 +1,4 @@
-# Opencode: Never Stop Never Stoppping
+# Opencode: Never Stop Never Stopping
 
 Your agent finishes a task and just sits there — tokens idle, deep thoughts unthought. This plugin makes opencode never stop: when the session goes quiet, it pokes the agent with a nudge from your config and gets it working again. No compute wasted, no babysitting.
 
