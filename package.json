@@ -1,6 +1,6 @@
 {
   "name": "opencode-never-stop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "opencode plugin: nudge the agent whenever it goes idle so it never stops working",
   "type": "module",
   "license": "MIT",
