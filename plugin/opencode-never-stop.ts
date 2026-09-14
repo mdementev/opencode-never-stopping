@@ -197,13 +197,15 @@ export const OpenCodeNeverStop: Plugin = async ({ client, directory }) => {
       if (input.command === "opencode-never-stop") {
         output.parts.splice(0, output.parts.length, {
           type: "text",
-          text: "opencode-never-stop: monitoring enabled.",
+          synthetic: true,
+          text: "Plugin notification (no task, no action needed): opencode-never-stop monitoring for this session is now ENABLED. Informational only — reply with one short confirmation and take no further action.",
         } as Part)
         await start(input.sessionID)
       } else if (input.command === "opencode-stop") {
         output.parts.splice(0, output.parts.length, {
           type: "text",
-          text: "opencode-never-stop: monitoring disabled.",
+          synthetic: true,
+          text: "Plugin notification (no task, no action needed): opencode-never-stop monitoring for this session is now DISABLED. Informational only — reply with one short confirmation and take no further action.",
         } as Part)
         await stop()
       }
