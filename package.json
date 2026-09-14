@@ -4,6 +4,10 @@
   "description": "opencode plugin: nudge the agent whenever it goes idle so it never stops working",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mdementev/opencode-never-stopping.git"
+  },
   "keywords": [
     "opencode",
     "opencode-plugin",

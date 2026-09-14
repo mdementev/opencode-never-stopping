@@ -2,6 +2,8 @@
 
 An [opencode](https://opencode.ai) plugin that keeps the agent working. When enabled, it watches the current session and, every `checkIntervalSeconds` of idle time, pokes the agent with a message from your config — so no compute goes to waste while the agent sits doing nothing.
 
+[![npm version](https://img.shields.io/npm/v/opencode-never-stop.svg)](https://www.npmjs.com/package/opencode-never-stop)
+
 ## How it works
 
 1. Run `/opencode-never-stop` in a session — the plugin starts monitoring *that* session.
@@ -50,7 +52,7 @@ Both scripts copy the plugin into `~/.config/opencode/plugins/`, register the tw
 
 ## Install (npm)
 
-Make sure the plugin's config JSON exists, then add the package to `plugin` in your `opencode.json`:
+Published as [`opencode-never-stop`](https://www.npmjs.com/package/opencode-never-stop). Make sure the plugin's config JSON exists, then add the package to `plugin` in your `opencode.json`:
 
 ```json
 {
@@ -82,7 +84,7 @@ And define the two commands (in `opencode.json` or as `.md` files in `.opencode/
 | `/opencode-never-stop`   | Enable monitoring of this session   |
 | `/opencode-stop`         | Disable monitoring                  |
 
-The plugin intercepts both commands and empties the prompt, so no prompt content is sent to the model — but a short assistant reply may still appear in the chat after the toggle (that's how slash commands behave).
+The plugin replaces the command's prompt with an explicit plugin notification (`synthetic`, "no task, no action needed"), so the agent just briefly confirms the toggle instead of treating it as a request.
 
 ## License
 
