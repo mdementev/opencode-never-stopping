@@ -1,24 +1,32 @@
 # Opencode: Never Stop Never Stoppping
 
-An [opencode](https://opencode.ai) plugin that keeps the agent working. When enabled, it watches the current session and, every `checkIntervalSeconds` of idle time, pokes the agent with a message from your config — so no compute goes to waste while the agent sits doing nothing.
+Your agent finishes a task and just sits there — tokens idle, deep thoughts unthought. This plugin makes opencode never stop: when the session goes quiet, it pokes the agent with a nudge from your config and gets it working again. No compute wasted, no babysitting.
 
 [![npm version](https://img.shields.io/npm/v/opencode-never-stop.svg)](https://www.npmjs.com/package/opencode-never-stop)
 
-## How it works
+## Install
 
-1. Run `/opencode-never-stop` in a session — the plugin starts monitoring *that* session.
-2. Every check it asks opencode for the session's status. If the session is `idle` for more than `checkIntervalSeconds`, the plugin sends the configured nudge message (which triggers a fresh assistant turn).
-3. Run `/opencode-stop` at any time — monitoring stops.
+```bash
+# npm
+opencode plugin add opencode-never-stop
 
-Any activity resets the idle timer: agent `busy`, tool calls, streamed message parts, permission replies — all count as "working". We only poke a genuinely idle session.
+# or locally, straight from this repo
+./scripts/install.sh   # macOS / Linux
+powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1  # Windows
+```
 
-## Config
+Restart opencode. Done.
 
-Plugin config lives in a plain JSON file (read fresh each time you start it). First match wins:
+## Usage
 
-1. `$OPENCODE_NEVER_STOP_CONFIG`
-2. `~/.config/opencode/opencode-never-stop.json` (global, created by the installer)
-3. `<project>/.opencode/opencode-never-stop.json` (per-project)
+| Command                  | Effect                          |
+| ------------------------ | ------------------------------- |
+| `/opencode-never-stop`   | Start poking this session       |
+| `/opencode-stop`         | Stop poking                    |
+
+## Configure
+
+Create `~/.config/opencode/opencode-never-stop.json`:
 
 ```json
 {
@@ -27,65 +35,9 @@ Plugin config lives in a plain JSON file (read fresh each time you start it). Fi
 }
 ```
 
-| Field                  | Default                                                | Description                                              |
-| ---------------------- | ------------------------------------------------------ | -------------------------------------------------------- |
-| `checkIntervalSeconds` | `15`                                                   | How many idle seconds before the agent gets nudged       |
-| `message`              | `Have you done all your assignments? If anything is left, continue — or spend some more time double-checking your work.` | Text sent to the idle agent |
+| Field                  | Default          | Description                              |
+| ---------------------- | ---------------- | ---------------------------------------- |
+| `checkIntervalSeconds` | `15`             | Idle seconds before the agent gets nudged |
+| `message`              | the quote above  | What to tell the idle agent               |
 
-## Install (local)
-
-### macOS / Linux
-
-```bash
-./scripts/install.sh
-```
-
-### Windows
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
-```
-
-Both scripts copy the plugin into `~/.config/opencode/plugins/`, register the two commands in `~/.config/opencode/commands/`, and create a default config file (never overwriting an existing one). No dependencies to install — the plugin uses only opencode's own runtime.
-
-> Restart opencode after installing.
-
-## Install (npm)
-
-Published as [`opencode-never-stop`](https://www.npmjs.com/package/opencode-never-stop). Make sure the plugin's config JSON exists, then add the package to `plugin` in your `opencode.json`:
-
-```json
-{
-  "plugin": ["opencode-never-stop"]
-}
-```
-
-And define the two commands (in `opencode.json` or as `.md` files in `.opencode/commands/`):
-
-```json
-{
-  "command": {
-    "opencode-never-stop": {
-      "template": "",
-      "description": "Start never stop mode"
-    },
-    "opencode-stop": {
-      "template": "",
-      "description": "Stop never stop mode"
-    }
-  }
-}
-```
-
-## Commands
-
-| Command                  | Effect                              |
-| ------------------------ | ----------------------------------- |
-| `/opencode-never-stop`   | Enable monitoring of this session   |
-| `/opencode-stop`         | Disable monitoring                  |
-
-The plugin replaces the command's prompt with an explicit plugin notification (`synthetic`, "no task, no action needed"), so the agent just briefly confirms the toggle instead of treating it as a request.
-
-## License
-
-MIT
+That's it. The agent stays busy, you stay productive.
