@@ -1,5 +1,5 @@
 import type { Plugin } from "@opencode-ai/plugin"
-import type { Event, SessionStatus } from "@opencode-ai/sdk"
+import type { Event, Part, SessionStatus } from "@opencode-ai/sdk"
 import { existsSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
@@ -193,10 +193,10 @@ export const OpenCodeNeverStop: Plugin = async ({ client, directory }) => {
     },
     "command.execute.before": async (input, output) => {
       if (input.command === "opencode-never-stop") {
-        output.parts.length = 0
+        output.parts = [{ type: "text", text: "opencode-never-stop: monitoring enabled." }] as Part[]
         await start(input.sessionID)
       } else if (input.command === "opencode-stop") {
-        output.parts.length = 0
+        output.parts = [{ type: "text", text: "opencode-never-stop: monitoring disabled." }] as Part[]
         await stop()
       }
     },
