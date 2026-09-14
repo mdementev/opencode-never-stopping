@@ -82,7 +82,7 @@ And define the two commands (in `opencode.json` or as `.md` files in `.opencode/
 | `/opencode-never-stop`   | Enable monitoring of this session   |
 | `/opencode-stop`         | Disable monitoring                  |
 
-The commands are no-ops for the LLM: the plugin intercepts them and empties the prompt, so a command run never sends prompt content to the model.
+The plugin intercepts both commands and empties the prompt, so no prompt content is sent to the model — but a short assistant reply may still appear in the chat after the toggle (that's how slash commands behave).
 
 ## License
 
