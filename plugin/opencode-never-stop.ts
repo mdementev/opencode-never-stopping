@@ -102,7 +102,8 @@ export const OpenCodeNeverStop: Plugin = async ({ client, directory }) => {
     track(sessionID)
     try {
       const status = await refreshStatus(sessionID)
-      if (status?.type === "idle") {
+      // per opencode semantics a session absent from the status map is idle
+      if (!status || status.type === "idle") {
         const state = track(sessionID)
         if (state.idleSince === null) state.idleSince = Date.now()
       }
@@ -148,9 +149,9 @@ export const OpenCodeNeverStop: Plugin = async ({ client, directory }) => {
     const now = Date.now()
     for (const sessionID of monitored) {
       const status = statuses[sessionID]
-      if (!status) continue
       const state = track(sessionID)
-      if (status.type !== "idle") {
+      // opencode removes idle sessions from the status map, so absence = idle
+      if (status && status.type !== "idle") {
         state.idleSince = null
         continue
       }
