@@ -14,7 +14,8 @@
     "never-stop"
   ],
   "files": [
-    "dist"
+    "dist",
+    "commands"
   ],
   "exports": {
     ".": {
