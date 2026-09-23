@@ -1,5 +1,5 @@
 import type { Plugin } from "@opencode-ai/plugin"
-import type { Event, Part, SessionStatus } from "@opencode-ai/sdk"
+import type { Event, Part, SessionStatus, AssistantMessage } from "@opencode-ai/sdk"
 import { existsSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
@@ -57,11 +57,23 @@ type TrackedSession = {
   idleSince: number | null
 }
 
+type ThresholdSpec =
+  | { kind: "percent"; percent: number }
+  | { kind: "tokens"; tokens: number }
+
+type WatchedSession = {
+  spec: ThresholdSpec
+  message: string
+  armed: boolean
+}
+
 export const OpenCodeNeverStop: Plugin = async ({ client, directory }) => {
   let config = loadConfig(directory)
   let enabled = false
   const monitored = new Set<string>()
   const tracked = new Map<string, TrackedSession>()
+  const contextWatched = new Map<string, WatchedSession>()
+  const modelLimits = new Map<string, number>()
 
   const log = async (level: "info" | "warn" | "error", message: string, extra?: Record<string, unknown>) => {
     try {
@@ -137,6 +149,85 @@ export const OpenCodeNeverStop: Plugin = async ({ client, directory }) => {
     }
   }
 
+  const parseThreshold = (raw: string): ThresholdSpec | null => {
+    const token = raw.trim().split(/\s+/)[0]
+    if (!token || !/^\d+$/.test(token)) return null
+    const value = parseInt(token, 10)
+    if (value < 100) return { kind: "percent", percent: value }
+    return { kind: "tokens", tokens: value }
+  }
+
+  const parseWatchArgs = (raw: string): { spec: ThresholdSpec; message: string } | null => {
+    const trimmed = raw.trim()
+    const specText = trimmed.split(/\s+/)[0]
+    if (!specText) return null
+    const message = trimmed.slice(specText.length).trim()
+    if (!message) return null
+    const spec = parseThreshold(specText)
+    if (!spec) return null
+    return { spec, message }
+  }
+
+  const cacheModelLimits = async (): Promise<boolean> => {
+    try {
+      const { providers } = unwrap(await client.config.providers({ query: { directory } }))
+      for (const provider of providers) {
+        for (const [modelID, model] of Object.entries(provider.models ?? {})) {
+          if (typeof model.limit?.context === "number" && model.limit.context > 0) {
+            modelLimits.set(`${provider.id}/${modelID}`, model.limit.context)
+          }
+        }
+      }
+      return true
+    } catch (err) {
+      await log("warn", `failed to read model limits: ${String(err)}`)
+      return false
+    }
+  }
+
+  const startContextWatch = async (sessionID: string, spec: ThresholdSpec, message: string) => {
+    if (spec.kind === "percent") await cacheModelLimits()
+    contextWatched.set(sessionID, { spec, message, armed: true })
+    await log("info", `started context watch for session ${sessionID}`, {
+      threshold: spec,
+    })
+  }
+
+  const stopContextWatch = async (sessionID: string) => {
+    contextWatched.delete(sessionID)
+    await log("info", `stopped context watch for session ${sessionID}`)
+  }
+
+  const fireContextAlert = async (sessionID: string, watch: WatchedSession) => {
+    if (!watch.armed) return
+    watch.armed = false
+    try {
+      await client.session.promptAsync({
+        path: { id: sessionID },
+        body: { parts: [{ type: "text", text: watch.message }] },
+      })
+      await log("info", `context threshold reached for session ${sessionID}; nudged agent`)
+    } catch (err) {
+      await log("error", `context nudge to session ${sessionID} failed: ${String(err)}`)
+    }
+  }
+
+  const onAssistantMessage = async (info: AssistantMessage) => {
+    const watch = contextWatched.get(info.sessionID)
+    if (!watch) return
+    const input = info.tokens.input
+    if (input <= 0) return
+    if (watch.spec.kind === "tokens") {
+      if (input >= watch.spec.tokens) await fireContextAlert(info.sessionID, watch)
+      else watch.armed = true
+      return
+    }
+    const limit = modelLimits.get(`${info.providerID}/${info.modelID}`)
+    if (!limit) return
+    if ((input / limit) * 100 >= watch.spec.percent) await fireContextAlert(info.sessionID, watch)
+    else watch.armed = true
+  }
+
   const tick = async () => {
     if (!enabled || monitored.size === 0) return
     let statuses: Record<string, SessionStatus>
@@ -189,6 +280,8 @@ export const OpenCodeNeverStop: Plugin = async ({ client, directory }) => {
       enabled = false
       monitored.clear()
       tracked.clear()
+      contextWatched.clear()
+      modelLimits.clear()
       if (timer) clearTimeout(timer)
     },
     "command.execute.before": async (input, output) => {
@@ -208,13 +301,22 @@ export const OpenCodeNeverStop: Plugin = async ({ client, directory }) => {
           text: "Plugin notification (no task, no action needed): opencode-never-stop monitoring for this session is now DISABLED. Informational only — reply with one short confirmation and take no further action.",
         } as Part)
         await stop()
+      } else if (input.command === "opencode-never-proceed-after") {
+        const parsed = parseWatchArgs(input.arguments ?? "")
+        if (parsed) {
+          await startContextWatch(input.sessionID, parsed.spec, parsed.message)
+        } else {
+          await log("warn", `opencode-never-proceed-after: expected '<threshold> <message>'`)
+        }
+      } else if (input.command === "opencode-never-proceed-after-stop") {
+        await stopContextWatch(input.sessionID)
       }
     },
     "tool.execute.before": async (input) => {
       onActivity(input.sessionID)
     },
     event: async ({ event }: { event: Event }) => {
-      if (!enabled) return
+      if (!enabled && contextWatched.size === 0) return
       switch (event.type) {
         case "session.status": {
           if (monitored.has(event.properties.sessionID)) {
@@ -235,7 +337,11 @@ export const OpenCodeNeverStop: Plugin = async ({ client, directory }) => {
           onActivity(event.properties.part.sessionID)
           break
         case "message.updated":
-          onActivity(event.properties.info.sessionID)
+          if (event.properties.info.role === "assistant") {
+            await onAssistantMessage(event.properties.info)
+          } else {
+            onActivity(event.properties.info.sessionID)
+          }
           break
         case "permission.replied":
           onActivity(event.properties.sessionID)
@@ -246,6 +352,7 @@ export const OpenCodeNeverStop: Plugin = async ({ client, directory }) => {
         case "session.deleted":
           monitored.delete(event.properties.info.id)
           tracked.delete(event.properties.info.id)
+          contextWatched.delete(event.properties.info.id)
           break
       }
     },
