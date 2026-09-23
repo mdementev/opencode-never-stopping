@@ -74,6 +74,7 @@ export const OpenCodeNeverStop: Plugin = async ({ client, directory }) => {
   const tracked = new Map<string, TrackedSession>()
   const contextWatched = new Map<string, WatchedSession>()
   const modelLimits = new Map<string, number>()
+  const warnedMissingLimit = new Set<string>()
 
   const log = async (level: "info" | "warn" | "error", message: string, extra?: Record<string, unknown>) => {
     try {
@@ -215,16 +216,29 @@ export const OpenCodeNeverStop: Plugin = async ({ client, directory }) => {
   const onAssistantMessage = async (info: AssistantMessage) => {
     const watch = contextWatched.get(info.sessionID)
     if (!watch) return
-    const input = info.tokens.input
-    if (input <= 0) return
+    const tokens = info.tokens
+    const total = tokens.input + tokens.cache.read + tokens.cache.write
+    if (total <= 0) return
     if (watch.spec.kind === "tokens") {
-      if (input >= watch.spec.tokens) await fireContextAlert(info.sessionID, watch)
+      if (total >= watch.spec.tokens) await fireContextAlert(info.sessionID, watch)
       else watch.armed = true
       return
     }
-    const limit = modelLimits.get(`${info.providerID}/${info.modelID}`)
-    if (!limit) return
-    if ((input / limit) * 100 >= watch.spec.percent) await fireContextAlert(info.sessionID, watch)
+    let limit = modelLimits.get(`${info.providerID}/${info.modelID}`)
+    if (!limit) {
+      await cacheModelLimits()
+      limit = modelLimits.get(`${info.providerID}/${info.modelID}`)
+    }
+    if (!limit) {
+      if (!warnedMissingLimit.has(info.sessionID)) {
+        warnedMissingLimit.add(info.sessionID)
+        await log("warn", `cannot compute context % for ${info.providerID}/${info.modelID}: no model limit`, {
+          total,
+        })
+      }
+      return
+    }
+    if ((total / limit) * 100 >= watch.spec.percent) await fireContextAlert(info.sessionID, watch)
     else watch.armed = true
   }
 
@@ -282,6 +296,7 @@ export const OpenCodeNeverStop: Plugin = async ({ client, directory }) => {
       tracked.clear()
       contextWatched.clear()
       modelLimits.clear()
+      warnedMissingLimit.clear()
       if (timer) clearTimeout(timer)
     },
     "command.execute.before": async (input, output) => {
