@@ -55,6 +55,7 @@ function loadConfig(directory: string): NeverStopConfig {
 
 type TrackedSession = {
   idleSince: number | null
+  messageOverride: string | null
 }
 
 type ThresholdSpec =
@@ -95,7 +96,7 @@ export const OpenCodeNeverStop: Plugin = async ({ client, directory }) => {
   const track = (sessionID: string): TrackedSession => {
     let state = tracked.get(sessionID)
     if (!state) {
-      state = { idleSince: null }
+      state = { idleSince: null, messageOverride: null }
       tracked.set(sessionID, state)
     }
     return state
@@ -106,13 +107,13 @@ export const OpenCodeNeverStop: Plugin = async ({ client, directory }) => {
     return statuses?.[sessionID]
   }
 
-  const start = async (sessionID: string) => {
+  const start = async (sessionID: string, messageOverride?: string) => {
     config = loadConfig(directory)
     enabled = true
     monitored.clear()
     tracked.clear()
     monitored.add(sessionID)
-    track(sessionID)
+    track(sessionID).messageOverride = messageOverride?.trim() ? messageOverride.trim() : null
     try {
       const status = await refreshStatus(sessionID)
       // per opencode semantics a session absent from the status map is idle
@@ -125,6 +126,7 @@ export const OpenCodeNeverStop: Plugin = async ({ client, directory }) => {
     }
     await log("info", `started monitoring session ${sessionID}`, {
       checkIntervalSeconds: config.checkIntervalSeconds,
+      messageOverride: track(sessionID).messageOverride,
     })
     toast("Never stop: monitoring ON", "success")
     schedule()
@@ -140,9 +142,10 @@ export const OpenCodeNeverStop: Plugin = async ({ client, directory }) => {
 
   const nudge = async (sessionID: string) => {
     try {
+      const message = track(sessionID).messageOverride ?? config.message
       await client.session.promptAsync({
         path: { id: sessionID },
-        body: { parts: [{ type: "text", text: config.message }] },
+        body: { parts: [{ type: "text", text: message }] },
       })
       await log("info", `nudged session ${sessionID}`)
     } catch (err) {
@@ -303,12 +306,13 @@ export const OpenCodeNeverStop: Plugin = async ({ client, directory }) => {
       // prompt.ts keeps its own reference to the parts array, so the hook
       // must mutate it in place instead of rebinding output.parts
       if (input.command === "opencode-never-stop") {
+        const override = (input.arguments ?? "").trim()
         output.parts.splice(0, output.parts.length, {
           type: "text",
           synthetic: true,
-          text: "Plugin notification (no task, no action needed): opencode-never-stop monitoring for this session is now ENABLED. Informational only — reply with one short confirmation and take no further action.",
+          text: `Plugin notification (no task, no action needed): opencode-never-stop monitoring for this session is now ENABLED${override ? ` with custom nudge message: "${override}"` : ""}. Informational only — reply with one short confirmation and take no further action.`,
         } as Part)
-        await start(input.sessionID)
+        await start(input.sessionID, override)
       } else if (input.command === "opencode-stop") {
         output.parts.splice(0, output.parts.length, {
           type: "text",
